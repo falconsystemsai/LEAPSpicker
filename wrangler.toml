@@ -1,0 +1,12 @@
+
+name = "leapspicker"
+main = "src/index.ts"
+compatibility_date = "2025-09-07"
+
+kv_namespaces = [
+  { binding = "leapspicker", id = "41a32fe24b79414f933dfa1be849cdb0", preview_id = "11111111111111111111111111111111" }
+]
+
+[triggers]
+# After US market close (22:30 UTC is ~6:30pm ET during DST)
+crons = ["30 22 * * 1-5"]
