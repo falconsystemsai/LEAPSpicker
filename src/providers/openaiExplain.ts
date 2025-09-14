@@ -2,6 +2,7 @@
  * Optional: use the OpenAI API to generate a concise, risk-aware rationale for each pick.
  * Falls back to a templated explanation if OPENAI_API_KEY is not set.
  */
+import OpenAI from 'openai';
 
 type Result = {
   symbol: string;
@@ -24,35 +25,19 @@ async function metricsHash(metrics: any): Promise<string> {
     .join('');
 }
 
-async function callGPTWithRetry(env: any, body: any, maxAttempts = 5) {
+async function callGPTWithRetry(client: OpenAI, body: any, maxAttempts = 5) {
   let backoff = 1000;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(body),
-    });
-    if (res.status === 429) {
-      let wait = backoff;
-      const retryAfter = res.headers.get('Retry-After');
-      if (retryAfter) {
-        const parsed = parseInt(retryAfter, 10);
-        if (!isNaN(parsed)) wait = Math.max(wait, parsed * 1000);
+    try {
+      return await client.responses.create(body);
+    } catch (err: any) {
+      if (err.status === 429) {
+        await sleep(backoff);
+        backoff *= 2;
+        continue;
       }
-      const reset = res.headers.get('x-ratelimit-reset-requests');
-      if (reset) {
-        const resetMs = parseFloat(reset) * 1000 - Date.now();
-        if (!isNaN(resetMs)) wait = Math.max(wait, resetMs);
-      }
-      await sleep(wait);
-      backoff *= 2;
-      continue;
+      throw err;
     }
-    if (!res.ok) throw new Error(`OpenAI error ${res.status}`);
-    return res.json();
   }
   throw new Error('OpenAI rate limit exceeded');
 }
@@ -67,6 +52,7 @@ export async function explainWithGPT(env: any, results: Result[]): Promise<Resul
         `Caution: verify IV rank and spreads before selecting LEAPS.`,
     }));
   }
+  const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
   const limit = env.EXPLAIN_TOP_N ? Math.min(parseInt(env.EXPLAIN_TOP_N, 10), 5) : 5;
   const explained: Result[] = [];
   for (let i = 0; i < results.length; i++) {
@@ -94,16 +80,16 @@ export async function explainWithGPT(env: any, results: Result[]): Promise<Resul
         options: r.options,
       });
       const body = {
-        model: 'gpt-4o-mini',
-        messages: [
+        model: 'gpt-5-mini',
+        input: [
           { role: 'system', content: sys },
           { role: 'user', content: `Explain this candidate: ${user}` },
         ],
         temperature: 0.3,
-        max_tokens: 150,
+        max_output_tokens: 150,
       };
-      const json: any = await callGPTWithRetry(env, body);
-      const text = json.choices?.[0]?.message?.content ?? '';
+      const json: any = await callGPTWithRetry(client, body);
+      const text = json.output_text ?? '';
       explained.push({ ...r, rationale: text });
       await env.leapspicker.put(cacheKey, text, {
         expirationTtl: 30 * 24 * 60 * 60,
