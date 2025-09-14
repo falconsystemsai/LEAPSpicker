@@ -1,3 +1,5 @@
+import { formatNY } from "../utils/dates";
+
 export function renderHTML(data: any) {
   const results = (data?.results ?? []) as any[];
 
@@ -93,7 +95,7 @@ export function renderHTML(data: any) {
     <div class="hero">
       <div>
         <div class="title">LEAPS Candidates</div>
-        <div class="subtitle">Last run: ${data?.ts ?? "—"} • Click headers to sort • Search to filter</div>
+        <div class="subtitle">Last run: ${formatNY(data?.ts)} • Click headers to sort • Search to filter</div>
       </div>
       <div class="controls">
         <label class="pill">🔎 <input id="q" placeholder="Filter symbols & text…" /></label>
