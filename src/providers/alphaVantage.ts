@@ -46,3 +46,53 @@ export function extractCloses(avJson: AlphaVantageDaily): number[] {
   rows.sort((a, b) => (a.d < b.d ? -1 : 1));
   return rows.map((r) => r.c);
 }
+
+export type AlphaVantageNewsItem = {
+  title: string;
+  url: string;
+  time_published: string;
+  summary: string;
+  source: string;
+  overall_sentiment_score: string;
+  overall_sentiment_label: string;
+  ticker_sentiment: { ticker: string; ticker_sentiment_score: string; ticker_sentiment_label: string }[];
+};
+
+type AlphaVantageNews = {
+  feed: AlphaVantageNewsItem[];
+};
+
+export async function getNewsSentiment(env: any, symbol: string) {
+  const key = env.ALPHA_VANTAGE_KEY;
+  if (!key) throw new Error('ALPHA_VANTAGE_KEY not set');
+  const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${symbol}&apikey=${key}`;
+  const cacheKey = `av:news:${symbol}`;
+  const json: AlphaVantageNews | AlphaVantageError = await cachedGetJSON(
+    env.leapspicker,
+    cacheKey,
+    30 * 60,
+    async () => {
+      const res = await fetch(url, { cf: { cacheTtl: 0 } });
+      if (!res.ok) throw new Error(`Alpha Vantage error ${res.status}`);
+      return res.json();
+    },
+  );
+  const feed = (json as AlphaVantageNews).feed || [];
+  let sum = 0;
+  let cnt = 0;
+  for (const item of feed) {
+    const tickerInfo = item.ticker_sentiment?.find((t) => t.ticker === symbol);
+    if (tickerInfo) {
+      sum += parseFloat(tickerInfo.ticker_sentiment_score);
+      cnt++;
+    }
+  }
+  const sentiment = cnt ? sum / cnt : 0;
+  const news = feed.slice(0, 3).map((n) => ({
+    title: n.title,
+    url: n.url,
+    published: n.time_published,
+  }));
+  return { sentiment, news };
+}
+

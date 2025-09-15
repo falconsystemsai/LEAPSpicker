@@ -10,6 +10,7 @@ export const config = {
     volRisk: 20,
     quality: 20,
     options: 10,
+    sentiment: 10,
   },
   thresholds: {
     passScore: 70,
