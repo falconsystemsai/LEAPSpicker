@@ -16,6 +16,7 @@ export type EquityMetrics = {
   fcfPositive?: boolean;
   netDebtToEbitda?: number;
   marginTrendOk?: boolean;
+  sentiment?: number; // -1..1
 };
 
 export type OptionsMetrics = {
@@ -57,12 +58,16 @@ export function scoreCandidate(eq: EquityMetrics, opt?: OptionsMetrics) {
     if (opt.oiOk && opt.spreadOk && opt.targetDeltaOk) options += 5;
   }
 
+  // Sentiment (10)
+  const sent = eq.sentiment == null ? 5 : clamp((eq.sentiment + 1) / 2, 0, 1) * 10;
+
   const total =
     (trend / 30) * w.trend +
     (mom / 20) * w.momentum +
     (volRisk / 20) * w.volRisk +
     (quality / 20) * w.quality +
-    (options / 10) * w.options;
+    (options / 10) * w.options +
+    (sent / 10) * w.sentiment;
 
   return Math.round(total);
 }

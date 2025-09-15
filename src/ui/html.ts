@@ -8,8 +8,10 @@ export function renderHTML(data: any) {
       const m = r.metrics ?? {};
       const score = Number.isFinite(r.score) ? r.score : 0;
 
+      const newsData = encodeURIComponent(JSON.stringify(r.news ?? []));
+
       return `
-      <tr>
+      <tr data-news="${newsData}">
         <td class="sym">
           <div class="symbox">
             <div class="ticker">${escapeHTML(r.symbol ?? "—")}</div>
@@ -21,6 +23,7 @@ export function renderHTML(data: any) {
             <span>${clamp(score, 0, 100)}</span>
           </div>
         </td>
+        <td>${pct(m.sentiment)}</td>
         <td>${num(m.rsi14, 1)} ${badgeRSI(m.rsi14)}</td>
         <td>${pct(m.hv60)} ${badgeHV(m.hv60)}</td>
         <td>${pct(m.mdd1y)} ${badgeMDD(m.mdd1y)}</td>
@@ -88,6 +91,9 @@ export function renderHTML(data: any) {
     .rationale{max-width:520px}
     .footer{margin:16px 0;color:var(--muted);font-size:12px}
     .hidden{display:none}
+    .news{margin-top:20px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+    .news h3{margin:0 0 8px 0;font-size:16px}
+    .news ul{margin:0;padding-left:16px}
   </style>
 </head>
 <body>
@@ -111,6 +117,7 @@ export function renderHTML(data: any) {
         <tr>
           <th data-k="symbol">Symbol</th>
           <th data-k="score" data-n>Score</th>
+          <th data-k="sentiment" data-n>Sentiment</th>
           <th data-k="rsi" data-n>RSI(14)</th>
           <th data-k="hv" data-n>HV60</th>
           <th data-k="mdd" data-n>MDD(1y)</th>
@@ -128,6 +135,7 @@ export function renderHTML(data: any) {
       <span>Rows: <b id="rc">${results.length}</b></span>
       <span>Theme: <b id="th">light</b></span>
     </div>
+    <div id="news" class="news hidden"></div>
     <div class="footer">Pro tip: tweak your universe and thresholds in <code>src/config.ts</code>.</div>
   </div>
 
@@ -145,6 +153,39 @@ export function renderHTML(data: any) {
   const refresh = $('#refresh');
   const copycsv = $('#copycsv');
   const copyjson = $('#copyjson');
+  const newsBox = $('#news');
+
+  rows.forEach(row => {
+    row.addEventListener('click', () => {
+      const data = row.dataset.news ? JSON.parse(decodeURIComponent(row.dataset.news)) : [];
+      const sym = row.querySelector('.ticker')?.textContent || '';
+      newsBox.innerHTML = '';
+      const h = document.createElement('h3');
+      h.textContent = sym + ' News';
+      newsBox.appendChild(h);
+      if (!data.length) {
+        const p = document.createElement('p');
+        p.className = 'sub';
+        p.textContent = 'No news available';
+        newsBox.appendChild(p);
+      } else {
+        const ul = document.createElement('ul');
+        data.forEach(n => {
+          const li = document.createElement('li');
+          const a = document.createElement('a');
+          a.href = n.url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = n.title;
+          li.appendChild(a);
+          ul.appendChild(li);
+        });
+        newsBox.appendChild(ul);
+      }
+      newsBox.classList.remove('hidden');
+      newsBox.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
 
   // Click-to-sort
   let sortKey = 'score', sortDir = -1;
@@ -197,7 +238,7 @@ export function renderHTML(data: any) {
 
   // Copy CSV / JSON
   const toCSV = () => {
-    const hdr = ['symbol','score','price','rsi14','hv60','mdd1y','ivRank','status','rationale'];
+    const hdr = ['symbol','score','sentiment','price','rsi14','hv60','mdd1y','ivRank','status','rationale'];
     const lines = [hdr.join(',')];
     Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
       const cells = Array.from(tr.querySelectorAll('td')).map(td =>
@@ -206,16 +247,17 @@ export function renderHTML(data: any) {
       if (!cells.length) return;
       const symCell = cells[0] || '';
       const score = cells[1] || '';
-      const rsi = cells[2] || '';
-      const hv = cells[3] || '';
-      const mdd = cells[4] || '';
-      const ivr = cells[5] || '';
-      const status = cells[6] || '';
-      const rationale = cells[7] || '';
+      const sentiment = cells[2] || '';
+      const rsi = cells[3] || '';
+      const hv = cells[4] || '';
+      const mdd = cells[5] || '';
+      const ivr = cells[6] || '';
+      const status = cells[7] || '';
+      const rationale = cells[8] || '';
       const priceMatch = symCell.match(/\\$(\\d[\\d.,]*)/);
       const symbol = symCell.split('\\n')[0].trim().split(' ')[0];
       const price = priceMatch ? priceMatch[1] : '';
-      const row = [symbol, score, price, rsi, hv, mdd, ivr, status, rationale.replace(/"/g, '""')];
+      const row = [symbol, score, sentiment, price, rsi, hv, mdd, ivr, status, rationale.replace(/"/g, '""')];
       lines.push(row.map(function(v){ return '"' + v + '"'; }).join(','));
     });
     return lines.join('\\n');

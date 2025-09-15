@@ -1,5 +1,5 @@
 
-import { getDailyAdjusted, extractCloses } from '../providers/alphaVantage';
+import { getDailyAdjusted, extractCloses, getNewsSentiment } from '../providers/alphaVantage';
 import { annualizedHV, maxDrawdown, momentum, rsi, sma } from '../metrics/indicators';
 import { getFundamentals, deriveQualityMetrics } from '../providers/fundamentals';
 import { scoreCandidate, EquityMetrics } from '../metrics/scoring';
@@ -29,18 +29,27 @@ export async function runEquityScreen(env: any, symbols: string[]) {
       const funda = await getFundamentals(env, symbol);
       const q = deriveQualityMetrics(funda);
 
+      const ns = await getNewsSentiment(env, symbol);
+
       const eq: EquityMetrics = {
-        symbol, price, sma50, sma200, sma200Slope, rsi14,
+        symbol,
+        price,
+        sma50,
+        sma200,
+        sma200Slope,
+        rsi14,
         hv60: hv ?? 0.4,
-        mdd1y, mom12m2m,
+        mdd1y,
+        mom12m2m,
         revCagr3y: q.revCagr3y,
         fcfPositive: q.fcfPositive,
         netDebtToEbitda: q.netDebtToEbitda,
         marginTrendOk: q.marginTrendOk,
+        sentiment: ns.sentiment,
       };
       const score = scoreCandidate(eq);
       const pass = score >= config.thresholds.passScore;
-      out.push({ symbol, score, price, metrics: eq, pass });
+      out.push({ symbol, score, price, metrics: eq, pass, news: ns.news });
     } catch (e) {
       // Skip symbol on errors
       console.log(`equityScreen error for ${symbol}:`, (e as Error).message);
